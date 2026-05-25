@@ -239,7 +239,9 @@ def plot_delivery_by_category(data_dict):
 
 def plot_delivery_heatmap(data_dict):
     """交付时效热力图（月度 × 品类）"""
-    df = data_dict['delivered']
+    df = data_dict['delivered'].copy()
+    # 将 Period 类型转为字符串，避免 Plotly JSON 序列化报错
+    df['purchase_year_month'] = df['purchase_year_month'].astype(str)
 
     pivot = df.pivot_table(
         values='delivery_time_days',
