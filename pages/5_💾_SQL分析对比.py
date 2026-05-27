@@ -15,6 +15,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from modules.data_loader import load_and_preprocess
+from dw.ads.dw_loader import load_from_warehouse
 
 st.set_page_config(
     page_title="SQL 分析对比",
@@ -22,49 +23,47 @@ st.set_page_config(
     layout="wide",
 )
 
-st.title("💾 SQL 数据分析对比")
-st.caption("实际工作中，数据存在 MySQL 数据库里，分析师用 SQL 取数 → Python 分析 → 出报告")
+st.title("💾 SQL 数据分析 & 数仓架构")
+st.caption("SQL vs Pandas 对比 + 数据仓库分层架构概览")
 
-# ---- 数据库连接 ----
+# ---- 侧边栏 ----
 with st.sidebar:
-    st.markdown("### 数据库配置")
-
-    use_mysql = st.checkbox("使用 MySQL", value=False,
-                            help="勾选则连接本地 MySQL，否则用 SQLite（零配置）")
-
-    if use_mysql:
-        mysql_user = st.text_input("MySQL 用户名", value="root")
-        mysql_password = st.text_input("MySQL 密码", type="password", value="")
-        mysql_host = st.text_input("主机", value="localhost")
-        mysql_port = st.number_input("端口", value=3306)
+    st.markdown("### 数据源")
+    data_source = st.radio(
+        "选择数据源",
+        ["数仓 DWS 层 (MySQL)", "CSV 本地文件"],
+        index=0,
+        help="数仓版：数据经 ODS→DWD→DWS ETL 处理后从 MySQL 读取"
+    )
 
     st.markdown("---")
-    st.markdown("### 工作流程")
+    st.markdown("### 数仓分层架构")
     st.markdown("""
-    1. CSV → 导入数据库
-    2. 写 SQL 查询
-    3. 返回结果给 Python
-    4. 画图/分析
-    5. 出报告
+    ```
+    ADS  ← 看板（读 DWS 聚合表）
+     ↑
+    DWS  ← 日/周聚合（6张表）
+     ↑
+    DWD  ← 订单宽表 + 维度表（5张）
+     ↑
+    ODS  ← CSV 原样入库（8张表）
+    ```
     """)
 
     st.markdown("---")
     st.markdown("### 面试要点")
     st.markdown("""
     这个页面向面试官展示：
+    - ✅ 理解数仓分层架构 (ODS/DWD/DWS/ADS)
     - ✅ 会写 SQL（JOIN、GROUP BY、窗口函数）
     - ✅ 会用 Python 分析
-    - ✅ 两种方式都会，灵活选择
     """)
 
-
-# 尝试连接数据库
+# ---- 数据库连接 ----
 @st.cache_resource
 def get_sql_analyzer(_use_mysql, **kw):
     from sql.sql_analyzer import SQLAnalyzer
-
     analyzer = SQLAnalyzer(use_mysql=_use_mysql)
-
     if _use_mysql:
         analyzer.mysql_config.update({
             'host': kw.get('host', 'localhost'),
@@ -72,14 +71,14 @@ def get_sql_analyzer(_use_mysql, **kw):
             'user': kw.get('user', 'root'),
             'password': kw.get('password', ''),
         })
-
     analyzer.connect()
     return analyzer
 
-
-# 加载 Pandas 数据（用于对比）
+# 根据选择加载数据
 @st.cache_data
-def get_pandas_data():
+def get_data(use_warehouse=True):
+    if use_warehouse:
+        return load_from_warehouse()
     return load_and_preprocess()
 
 
@@ -88,15 +87,10 @@ def get_pandas_data():
 # ============================================================
 
 pandas_data = None
+use_warehouse = (data_source == "数仓 DWS 层 (MySQL)")
 
-st.info("""
-这个页面展示**同一道分析题的双重解法**：
-
-- **左列**：SQL 查询（模拟你每天从数据库取数写的 SQL）
-- **右列**：结果图表（取完数据后的可视化）
-- **底部**：等价的 Pandas 代码（对比参考）
-
-面试时你可以说："**这个分析既可以用 SQL 在数据库里做聚合，也可以用 Pandas 在 Python 里处理，我都掌握。**"
+st.info(f"""
+当前数据源: **{data_source}**
 """)
 
 # ---- Tabs ----
@@ -129,7 +123,7 @@ ORDER BY purchase_year_month;"""
 
     # 用 Pandas 数据画图（避免依赖数据库连接）
     try:
-        pandas_data = get_pandas_data()
+        pandas_data = get_data(use_warehouse)
         monthly = pandas_data['monthly_summary']
 
         fig = go.Figure()
@@ -209,7 +203,7 @@ ORDER BY revenue DESC;"""
 
     try:
         if pandas_data is None:
-            pandas_data = get_pandas_data()
+            pandas_data = get_data(use_warehouse)
         cat = pandas_data['category_summary'].sort_values('total_revenue', ascending=False)
         cat['cum_pct'] = cat['total_revenue'].cumsum() / cat['total_revenue'].sum() * 100
 
@@ -267,7 +261,7 @@ GROUP BY
 
     try:
         if pandas_data is None:
-            pandas_data = get_pandas_data()
+            pandas_data = get_data(use_warehouse)
         df = pandas_data['delivered'].merge(
             pandas_data['raw']['order_reviews'].groupby('order_id')['review_score'].mean().reset_index(),
             on='order_id', how='inner'
@@ -340,7 +334,7 @@ ORDER BY AVG(r_score+f_score+m_score) DESC;"""
 
     try:
         if pandas_data is None:
-            pandas_data = get_pandas_data()
+            pandas_data = get_data(use_warehouse)
         df = pandas_data['delivered']
         ref_date = df['order_purchase_timestamp'].max() + pd.Timedelta(days=1)
 

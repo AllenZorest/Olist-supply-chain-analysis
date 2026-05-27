@@ -10,11 +10,11 @@ import streamlit as st
 # 添加项目根目录到路径
 sys.path.insert(0, str(Path(__file__).parent))
 
-from modules.data_loader import load_and_preprocess, get_data_summary
 from modules.delivery_analysis import run_delivery_analysis
 from modules.inventory_analysis import run_inventory_analysis
 from modules.logistics_analysis import run_logistics_analysis
 from modules.sales_analysis import run_sales_analysis
+from dw.ads.dw_loader import load_from_warehouse
 import pandas as pd
 
 # 页面配置
@@ -86,6 +86,16 @@ with st.sidebar:
     st.markdown("*Kaggle 公开数据集*")
 
     st.markdown("---")
+    st.markdown("### 数据架构")
+    st.markdown("""
+    **数仓分层 (ODS → DWD → DWS → ADS)**
+    - ODS: 原始 CSV 入库 MySQL
+    - DWD: 订单宽表 + 4 张维度表
+    - DWS: 6 张日/周聚合汇总表
+    - ADS: Streamlit 交互看板
+    """)
+
+    st.markdown("---")
     st.markdown("### 关于项目")
     st.markdown("""
     本项目面向**供应链数据分析**岗位需求，涵盖：
@@ -94,68 +104,73 @@ with st.sidebar:
     - 物流满意度归因
     - 销售趋势预测
 
-    技术栈：Python + Streamlit + Plotly
+    技术栈：Python + MySQL + Streamlit + Plotly
     """)
 
     st.markdown("---")
-    st.caption("Made with ❤️ by Allen | 2024")
+    st.caption("Made with ❤️ by Allen | 2026")
 
 
 # --- 主页面内容 ---
 
 st.markdown('<p class="main-header">📦 Olist 巴西电商平台 — 供应链数据分析</p>', unsafe_allow_html=True)
-st.markdown('<p class="sub-header">供应商交付时效 | 品类库存周转 | 物流满意度归因 | 销售趋势分析</p>',
+st.markdown('<p class="sub-header">供应商交付时效 | 品类库存周转 | 物流满意度归因 | 销售趋势分析 | 数仓分层架构</p>',
             unsafe_allow_html=True)
 
 # --- 数据加载 ---
-with st.spinner("正在加载和预处理数据... 首次运行需要下载数据集，请耐心等待"):
+with st.spinner("正在从数仓 DWS 层加载数据..."):
     try:
-        data_dict = load_and_preprocess()
-        st.success("✅ 数据加载完成！")
+        data_dict = load_from_warehouse()
+        st.success("✅ 数仓数据加载完成！(ODS → DWD → DWS → ADS)")
     except Exception as e:
         st.error(f"❌ 数据加载失败: {e}")
         st.info("""
-        ### 如何获取数据？
-
-        请确保数据集CSV文件放在 `data/` 目录下，或使用以下命令自动下载：
+        ### 请先运行数仓 ETL
 
         ```bash
-        pip install kagglehub
-        python -c "import kagglehub; kagglehub.dataset_download('olistbr/brazilian-ecommerce')"
+        py dw/run_all.py
         ```
 
-        也可以在 Kaggle 手动下载：[Olist Brazilian E-commerce Dataset](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce)
+        这将依次执行：
+        1. ODS 层：将 CSV 原样导入 MySQL
+        2. DWD 层：清洗数据，构建订单宽表 + 维度表
+        3. DWS 层：计算日/周聚合汇总表
+
+        然后重新启动 Streamlit。
         """)
         st.stop()
 
 # --- 数据概览 ---
-st.markdown('<p class="section-title">📊 数据概览</p>', unsafe_allow_html=True)
+st.markdown('<p class="section-title">📊 数据概览（来自 DWS 汇总表）</p>', unsafe_allow_html=True)
 
-summary = get_data_summary(data_dict)
+# 从 DWS 表获取 KPI
+dm = data_dict.get('daily_metrics', pd.DataFrame())
+if not dm.empty:
+    total_orders = int(dm['total_orders'].sum())
+    total_gmv = dm['total_gmv'].sum()
+    avg_delivery = dm['avg_delivery_days'].mean()
+    delay_rate = dm['delay_rate'].mean() * 100
+    unique_customers = int(dm['unique_customers'].sum())
+    unique_sellers = int(dm['unique_sellers'].sum())
+    date_range = f"{dm['purchase_date'].min().strftime('%Y-%m')} ~ {dm['purchase_date'].max().strftime('%Y-%m')}"
+else:
+    total_orders = total_gmv = avg_delivery = delay_rate = unique_customers = unique_sellers = 0
+    date_range = "N/A"
 
-# KPI 卡片行 - 第一行
+# KPI 卡片行
 cols = st.columns(6)
 kpi_items = [
-    ("总订单数", summary['总订单数'], "📦"),
-    ("已交付订单", summary['已交付订单'], "✅"),
-    ("总销售额", summary['总销售额'], "💰"),
-    ("商品品类数", str(summary['商品品类数']), "🏷️"),
-    ("卖家数", str(summary['卖家数']), "🏪"),
-    ("客户数", str(summary['客户数']), "👥"),
+    ("总订单数", f"{total_orders:,}", "📦"),
+    ("总GMV", f"¥{total_gmv:,.0f}", "💰"),
+    ("客户数", f"{unique_customers:,}", "👥"),
+    ("活跃卖家", f"{unique_sellers:,}", "🏪"),
+    ("平均交付(天)", f"{avg_delivery:.1f}", "⏱️"),
+    ("延迟率", f"{delay_rate:.1f}%", "⚠️"),
 ]
 for col, (label, value, icon) in zip(cols, kpi_items):
     col.metric(f"{icon} {label}", value)
 
-# KPI 卡片行 - 第二行
-st.markdown("")
-cols = st.columns(4)
-kpi_items2 = [
-    ("平均交付天数", summary['平均交付天数'], "⏱️"),
-    ("延迟交付率", summary['延迟交付率'], "⚠️"),
-    ("数据时间范围", summary['数据时间范围'], "📅"),
-]
-for col, (label, value, icon) in zip(cols[:3], kpi_items2):
-    col.metric(f"{icon} {label}", value)
+st.caption(f"数据时间范围: {date_range}")
 
 st.markdown("---")
 

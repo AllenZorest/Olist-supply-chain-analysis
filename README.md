@@ -1,46 +1,83 @@
 # 🚚 Olist 电商平台供应链数据分析
 
 [![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/)
+[![MySQL](https://img.shields.io/badge/MySQL-8.0+-orange.svg)](https://www.mysql.com/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.28+-red.svg)](https://streamlit.io/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-> 基于巴西最大电商平台 Olist 公开数据集，完成供应商交付时效、品类库存周转、物流满意度归因、销售趋势四大维度的供应链数据分析。
->
+> 基于巴西 Olist 电商数据集，构建**标准数仓分层架构 (ODS → DWD → DWS → ADS)**，完成交付时效、库存周转、满意度归因、销售趋势四大维度分析。Streamlit 看板从 DWS 聚合表读取，不再直读 CSV。
 
-## 📊 项目预览
+## 🏗️ 数仓分层架构
 
-![Streamlit Dashboard](https://img.icons8.com/color/96/dashboard-layout.png)
+```
+ADS  ←  Streamlit 看板（读 DWS 聚合表，非 CSV）
+ ↑     5 个页面: 概览 / 交付 / 库存 / 满意度 / 销售趋势
+DWS  ←  6 张汇总表
+ ↑     日度指标 · 品类日度 · 州级日度 · 周度 · 品类全局 · 州级全局
+DWD  ←  1 张订单宽表 + 4 张维度表
+ ↑     客户维度 · 商品维度 · 卖家维度 · 日期维度 · dwd_order_detail
+ODS  ←  8 张原始表 (CSV 原样入库)
+       customers · sellers · products · orders · items · payments · reviews
+```
 
-交互式 Streamlit 看板，覆盖四大分析模块：
+| 层 | 表数 | ~行数 | 职责 |
+|----|:--:|------|------|
+| ODS | 8 | 50万+ | CSV 原样入库，不做任何转换 |
+| DWD | 5 | 11万 | 清洗、JOIN 多表、派生交付/RFM 特征 |
+| DWS | 6 | 3000+ | 日/周/品类/州级聚合，含 ABC 分类 |
+| ADS | - | - | Streamlit 看板直接读 DWS 表 |
 
-| 模块 | 核心分析内容 | 关键指标 |
-|------|-------------|---------|
-| 📦 **供应商交付时效** | 交付周期分布、按时交付率、延迟分析 | 平均交付周期、延迟率、按时率 |
-| 📊 **品类库存周转** | 销售速度、ABC分析、库存周转估算 | 日均销量、品类集中度、周转效率 |
-| 🚚 **物流满意度归因** | 时效 vs 评分、区域对比、因素分析 | 评分差异、相关性系数、关键因素 |
-| 📈 **销售趋势分析** | 月度趋势、季节性、RFM分层 | 销售额、客单价、客户分层占比 |
+**一键 ETL**: `py dw/run_all.py`
+
+## 📊 分析模块
+
+| 模块 | 核心内容 | 关键指标 |
+|------|---------|---------|
+| 📦 供应商交付时效 | 周期分布、月度趋势、各州/品类对比、延迟热力图 | 平均交付天数、延迟率、按时率 |
+| 📊 品类库存周转 | 销售速度、ABC 帕累托、品类-卖家关系 | 日均销量、收入集中度、ABC 分类 |
+| 🚚 物流满意度归因 | 时效 vs 评分、因素相关性、区域对比 | 评分差异、相关系数、关键因素 |
+| 📈 销售趋势分析 | 月度趋势、季节性热力、RFM 客户分层 | GMV、客单价、客户分层占比 |
+| 💾 SQL 对比 | SQL vs Pandas 等价写法、数仓结构概览 | JOIN/GROUP BY/窗口函数/CTE |
 
 ## 🗂️ 项目结构
 
 ```
-olist-supply-chain-analysis/
-├── app.py                          # Streamlit 主应用（概览页 + Tab切换）
-├── pages/                          # Streamlit 多页面
+Olist-supply-chain-analysis/
+├── app.py                           # Streamlit 主看板
+├── pages/                           # 5 个独立分析页面
 │   ├── 1_📦_供应商交付时效.py
 │   ├── 2_📊_品类库存周转.py
 │   ├── 3_🚚_物流满意度归因.py
-│   └── 4_📈_销售趋势分析.py
-├── modules/                        # 核心分析模块
-│   ├── data_loader.py              # 数据加载与预处理
-│   ├── delivery_analysis.py        # 交付时效分析
-│   ├── inventory_analysis.py       # 库存周转分析
-│   ├── logistics_analysis.py       # 物流满意度分析
-│   └── sales_analysis.py           # 销售趋势分析
+│   ├── 4_📈_销售趋势分析.py
+│   └── 5_💾_SQL分析对比.py
+├── modules/                         # 分析模块（可视化函数）
+│   ├── data_loader.py               # CSV 数据加载（旧版/回退）
+│   ├── delivery_analysis.py
+│   ├── inventory_analysis.py
+│   ├── logistics_analysis.py
+│   └── sales_analysis.py
+├── dw/                              # 数仓 ETL 模块 ★
+│   ├── config.py                    # MySQL 连接配置
+│   ├── run_all.py                   # 一键 ETL 编排 (ODS→DWD→DWS)
+│   ├── ads/
+│   │   ├── queries.py               # ADS 查询函数
+│   │   └── dw_loader.py             # 数仓版数据加载器
+│   ├── ods/                         # ODS 层
+│   ├── dwd/                         # DWD 层
+│   └── dws/                         # DWS 层
+├── sql/                             # DDL 定义
+│   ├── ods_setup.sql                # ODS 建表语句
+│   ├── dwd_setup.sql                # DWD 建表语句
+│   ├── dws_setup.sql                # DWS 建表语句
+│   ├── schema.sql                   # 原始 Schema（兼容）
+│   ├── analysis_queries.sql         # 21条业务 SQL
+│   ├── sql_analyzer.py              # SQL 执行器
+│   └── import_to_mysql.py           # CSV 导入脚本
 ├── utils/
-│   └── helpers.py                  # 工具函数
-├── data/                           # 数据集目录
-├── requirements.txt                # Python 依赖
-└── README.md                       # 本文件
+│   └── helpers.py
+├── data/                            # 数据集（CSV）
+├── requirements.txt
+└── README.md
 ```
 
 ## 🚀 快速开始
@@ -48,8 +85,8 @@ olist-supply-chain-analysis/
 ### 1. 克隆项目
 
 ```bash
-git clone https://github.com/AllenZorest/olist-supply-chain-analysis.git
-cd olist-supply-chain-analysis
+git clone https://github.com/AllenZorest/Olist-supply-chain-analysis.git
+cd Olist-supply-chain-analysis
 ```
 
 ### 2. 安装依赖
@@ -60,119 +97,51 @@ pip install -r requirements.txt
 
 ### 3. 下载数据集
 
-**方式一：自动下载（推荐）**
+将 9 个 CSV 文件放入 `data/` 目录。
+
+从 [Kaggle](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) 下载。
+
+### 4. 运行数仓 ETL（推荐）
 
 ```bash
-python -c "import kagglehub; kagglehub.dataset_download('olistbr/brazilian-ecommerce')"
+# 修改 dw/config.py 中的 MySQL 密码，然后:
+py dw/run_all.py
 ```
 
-**方式二：手动下载**
-
-1. 访问 [Kaggle Olist Dataset](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce)
-2. 下载所有 CSV 文件
-3. 放入 `data/` 目录
-
-### 4. 启动看板
+### 5. 启动看板
 
 ```bash
 streamlit run app.py
 ```
 
-浏览器访问 `http://localhost:8501` 即可查看交互式看板。
+浏览器访问 `http://localhost:8501`。
 
-## 📈 分析模块详解
-
-### 📦 供应商交付时效分析
-
-**业务问题**：供应商能否按时交付？哪些环节是瓶颈？
-
-**分析内容**：
-- 交付周期分布（直方图 + 箱线图）
-- 月度交付时效趋势
-- 各州/品类交付时效对比
-- 延迟交付深度分析（延迟天数分布、延迟Top品类）
-- 交付周期热力图（月度 × 品类）
-
-**关键发现**：
-- 确定最佳交付窗口（SLA目标）
-- 识别高频延迟品类和区域
-- 分析延迟对客户满意度的影响程度
-
-### 📊 品类库存周转分析
-
-**业务问题**：哪些品类周转快？库存结构是否合理？
-
-**分析内容**：
-- 品类结构树状图（收入 + 延迟率）
-- 品类销售速度排名（日均销量）
-- ABC 帕累托分析（品类集中度）
-- 卖家-品类关系网络
-- Top品类月度收入趋势
-
-**关键发现**：
-- 头部3品类收入占比
-- 长尾品类识别
-- 品类竞争程度评估
-
-### 🚚 物流满意度归因分析
-
-**业务问题**：物流时效如何影响客户满意度？哪些因素最敏感？
-
-**分析内容**：
-- 评分分布（1-5分）
-- 按时 vs 延迟交付评分对比（箱线图）
-- 交付天数 vs 评分散点图 + 回归线
-- 各州满意度对比（气泡图）
-- 交付天数分段满意度分析
-- 相关性热力图（评分 vs 各因素）
-- 关键业务洞察与建议
-
-**关键发现**：
-- 交付时效与满意度的相关系数
-- 最优交付窗口建议
-- 区域物流改善优先级
-
-### 📈 销售趋势分析
-
-**业务问题**：销售趋势如何？客户结构是否健康？
-
-**分析内容**：
-- 月度收入 & 订单量趋势（双Y轴）
-- 季节性分析（周几 + 月份）
-- 地理销售分布（各州）
-- 品类收入占比趋势（堆积面积图）
-- 订单状态漏斗
-- RFM 客户分层（饼图 + 消费对比）
-
-**关键发现**：
-- 月环比增长率
-- 季节性高峰时段
-- 高价值客户占比
+> **无 MySQL 也能用**: 项目会自动回退到 CSV 本地加载模式。
 
 ## 🛠️ 技术栈
 
-| 类别 | 技术 |
+| 领域 | 技术 |
 |------|------|
-| **语言** | Python 3.8+ |
-| **看板框架** | Streamlit |
-| **数据处理** | Pandas, NumPy |
-| **可视化** | Plotly, Matplotlib, Seaborn |
-| **统计分析** | SciPy, Scikit-learn |
-| **数据获取** | Kagglehub |
+| 看板框架 | Streamlit |
+| 数据库 | MySQL 8.0 (数仓) / SQLite (回退) |
+| 数据处理 | Pandas, NumPy |
+| 可视化 | Plotly, Matplotlib, Seaborn |
+| ETL | Python + pymysql |
 
+## 🎯 岗位匹配
 
-## 📝 数据集说明
+| 岗位要求 | 项目体现 |
+|---------|---------|
+| 供应链分析 | 四大模块覆盖交付/库存/物流/销售 |
+| SQL/MySQL | 数仓分层 + 21条业务查询 + DDL/ETL |
+| Python | 全 Python 实现，模块化架构 |
+| 数据可视化 | Streamlit + Plotly 交互看板 |
+| 业务需求分析 | 每个分析从业务问题出发 |
 
-**Olist Brazilian E-commerce Dataset**
+## 📝 面试话术
 
-- 数据时间：2016年9月 - 2018年8月
-- 约10万条订单记录
-- 包含9张数据表：orders, order_items, products, sellers, customers, order_reviews, order_payments, geolocation, category_translation
+> "这个项目我构建了标准的数据仓库分层架构。底层 ODS 存原始 CSV，DWD 通过多表 JOIN 构建订单宽表，DWS 做日/周聚合，最后 ADS 用 Streamlit 展示。整个流程 ODS→DWD→DWS 一键 ETL，看板从 DWS 直接读聚合表。核心分析逻辑既用 Pandas 实现，也用 SQL 重写了一遍，JOIN、GROUP BY、窗口函数、CTE 都覆盖到了。"
 
-## 📄 License
+## 📜 License
 
-MIT License - 详见 [LICENSE](LICENSE) 文件
-
----
-
-**Made with ❤️ by Allen | 数据科学与大数据技术专业**
+MIT
