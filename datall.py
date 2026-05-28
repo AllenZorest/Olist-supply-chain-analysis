@@ -195,7 +195,7 @@ def overview():
 
     # --- 模块关键图表摘要 ---
     st.markdown('<p class="section-title">🔍 各模块关键指标</p>', unsafe_allow_html=True)
-    st.caption("点击左侧导航栏查看各模块完整分析（含全部图表和数据表）")
+    st.caption("点击下方按钮或左侧导航跳转至完整分析（含全部图表和数据表）")
 
     tabs = st.tabs(["📦 交付时效", "📊 库存周转", "🚚 满意度", "📈 销售趋势"])
 
@@ -215,9 +215,10 @@ def overview():
             plot_monthly_delivery_trend(data_dict)
         with col2:
             plot_delivery_by_category(data_dict)
-        st.markdown(
-            '<p class="nav-hint">📋 点击左侧「📦 供应商交付时效」查看完整分析（各州对比、热力图等）</p>',
-            unsafe_allow_html=True,
+        st.page_link(
+            "pages/1_📦_供应商交付时效.py",
+            label="查看完整交付时效分析 →（各州对比、热力图等）",
+            icon="📦",
         )
 
     # ---- Tab 2: 库存周转 ----
@@ -236,9 +237,10 @@ def overview():
             plot_category_concentration(data_dict)
         with col2:
             plot_sales_velocity(data_dict)
-        st.markdown(
-            '<p class="nav-hint">📋 点击左侧「📊 品类库存周转」查看完整分析（卖家网络、月度动态、数据明细等）</p>',
-            unsafe_allow_html=True,
+        st.page_link(
+            "pages/2_📊_品类库存周转.py",
+            label="查看完整库存周转分析 →（卖家网络、月度动态、数据明细等）",
+            icon="📊",
         )
 
     # ---- Tab 3: 满意度 ----
@@ -257,9 +259,10 @@ def overview():
         with col2:
             plot_score_distribution(data_dict)
         plot_correlation_heatmap(data_dict)
-        st.markdown(
-            '<p class="nav-hint">📋 点击左侧「🚚 物流满意度归因」查看完整分析（各州满意度、因素分解等）</p>',
-            unsafe_allow_html=True,
+        st.page_link(
+            "pages/3_🚚_物流满意度归因.py",
+            label="查看完整满意度归因分析 →（各州满意度、因素分解等）",
+            icon="🚚",
         )
 
     # ---- Tab 4: 销售趋势 ----
@@ -278,14 +281,15 @@ def overview():
             plot_category_trend(data_dict)
         with col2:
             plot_rfm_analysis(data_dict)
-        st.markdown(
-            '<p class="nav-hint">📋 点击左侧「📈 销售趋势分析」查看完整分析（季节性、地理分布、漏斗等）</p>',
-            unsafe_allow_html=True,
+        st.page_link(
+            "pages/4_📈_销售趋势分析.py",
+            label="查看完整销售趋势分析 →（季节性、地理分布、漏斗等）",
+            icon="📈",
         )
 
 
 # ============================================================
-# 页面导航（st.navigation 实现自定义标题 + 集中路由）
+# 页面导航（数据总览可折叠，展开后为概览 + 5 个分析页面）
 # ============================================================
 overview_page = st.Page(overview, title="数据总览", icon="🏠", default=True)
 delivery_page = st.Page("pages/1_📦_供应商交付时效.py")
@@ -295,7 +299,16 @@ sales_page = st.Page("pages/4_📈_销售趋势分析.py")
 sql_page = st.Page("pages/5_💾_SQL分析对比.py")
 
 pg = st.navigation(
-    [overview_page, delivery_page, inventory_page, logistics_page, sales_page, sql_page],
+    {
+        "📦 数据总览": [
+            overview_page,
+            delivery_page,
+            inventory_page,
+            logistics_page,
+            sales_page,
+            sql_page,
+        ],
+    },
     position="sidebar",
 )
 pg.run()
