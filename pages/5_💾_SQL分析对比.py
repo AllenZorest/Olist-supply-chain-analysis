@@ -17,11 +17,7 @@ import plotly.graph_objects as go
 from modules.data_loader import load_and_preprocess
 from dw.ads.dw_loader import load_from_warehouse
 
-st.set_page_config(
-    page_title="SQL 分析对比",
-    page_icon="💾",
-    layout="wide",
-)
+# 页面标题/icon 由 datall.py 的 st.set_page_config 统一设置
 
 st.title("💾 SQL 数据分析 & 数仓架构")
 st.caption("SQL vs Pandas 对比 + 数据仓库分层架构概览")

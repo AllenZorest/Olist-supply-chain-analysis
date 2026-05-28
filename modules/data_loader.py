@@ -217,6 +217,12 @@ def load_and_preprocess():
     reviews_agg = raw['order_reviews'].groupby('order_id')['review_score'].mean().reset_index()
     df_delivered = df_delivered.merge(reviews_agg, on='order_id', how='left')
 
+    # 统一列名：让 datall.py 两种数据源用同一套列名
+    if 'order_purchase_timestamp' in df.columns and 'purchase_date' not in df.columns:
+        df['purchase_date'] = df['order_purchase_timestamp']
+    if 'order_purchase_timestamp' in df_delivered.columns and 'purchase_date' not in df_delivered.columns:
+        df_delivered['purchase_date'] = df_delivered['order_purchase_timestamp']
+
     return {
         'main': df,
         'delivered': df_delivered,

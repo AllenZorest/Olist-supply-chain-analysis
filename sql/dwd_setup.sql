@@ -32,8 +32,11 @@ CREATE TABLE dim_products (
     product_category_name    VARCHAR(100)  COMMENT '葡语品类名',
     category_name_english    VARCHAR(100)  COMMENT '英语品类名',
     product_weight_g         DECIMAL(10,2) COMMENT '重量(g)',
-    product_volume_cm3       DECIMAL(10,2) COMMENT '体积(cm³)',
-    product_photos_qty       INT           COMMENT '图片数量',
+    product_length_cm       DECIMAL(10,2) COMMENT '长度(cm)',
+    product_height_cm       DECIMAL(10,2) COMMENT '高度(cm)',
+    product_width_cm        DECIMAL(10,2) COMMENT '宽度(cm)',
+    product_volume_cm3      DECIMAL(10,2) COMMENT '体积(cm³)',
+    product_photos_qty      INT           COMMENT '图片数量',
     PRIMARY KEY (product_id),
     INDEX idx_dim_prod_cat (category_name_english),
     INDEX idx_dim_prod_weight (product_weight_g)
@@ -59,19 +62,19 @@ CREATE TABLE dim_sellers (
 -- 生成2016-2018年每日记录，支撑时间维度分析
 -- ============================================================
 DROP TABLE IF EXISTS dim_dates;
-CREATE TABLE dim_dates (
-    date_id        DATE         NOT NULL COMMENT '日期（主键）',
-    year           SMALLINT     COMMENT '年',
-    quarter        TINYINT      COMMENT '季度(1-4)',
-    month          TINYINT      COMMENT '月(1-12)',
-    month_name     VARCHAR(10)  COMMENT '月份英文名',
-    week_of_year   TINYINT      COMMENT '年内第几周',
-    day_of_month   TINYINT      COMMENT '日(1-31)',
-    day_of_week    TINYINT      COMMENT '星期几(1=周一,7=周日)',
-    day_name       VARCHAR(10)  COMMENT '星期英文名',
-    is_weekend     TINYINT      COMMENT '是否周末(0/1)',
-    year_month     VARCHAR(7)   COMMENT '年-月(YYYY-MM)',
-    PRIMARY KEY (date_id)
+CREATE TABLE `dim_dates` (
+    `date_id`        DATE         NOT NULL COMMENT '日期（主键）',
+    `year`           SMALLINT     COMMENT '年',
+    `quarter`        TINYINT      COMMENT '季度(1-4)',
+    `month`          TINYINT      COMMENT '月(1-12)',
+    `month_name`     VARCHAR(10)  COMMENT '月份英文名',
+    `week_of_year`   TINYINT      COMMENT '年内第几周',
+    `day_of_month`   TINYINT      COMMENT '日(1-31)',
+    `day_of_week`    TINYINT      COMMENT '星期几(1=周一,7=周日)',
+    `day_name`       VARCHAR(10)  COMMENT '星期英文名',
+    `is_weekend`     TINYINT      COMMENT '是否周末(0/1)',
+    `year_month`     VARCHAR(7)   COMMENT '年-月(YYYY-MM)',
+    PRIMARY KEY (`date_id`)
 ) COMMENT 'DWD层-日期维度表';
 
 -- ============================================================

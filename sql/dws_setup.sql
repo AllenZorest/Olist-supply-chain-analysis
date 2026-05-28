@@ -76,7 +76,7 @@ CREATE TABLE dws_daily_state (
 -- ============================================================
 DROP TABLE IF EXISTS dws_weekly_metrics;
 CREATE TABLE dws_weekly_metrics (
-    year_week           VARCHAR(7)    NOT NULL COMMENT '年-周(YYYY-WW)',
+    year_week           VARCHAR(8)    NOT NULL COMMENT '年-周(YYYY-Www)',
     week_start_date     DATE          COMMENT '周起始日(周一)',
     week_end_date       DATE          COMMENT '周结束日(周日)',
     total_orders         INT           COMMENT '周订单总量',

@@ -205,7 +205,7 @@ if __name__ == '__main__':
         create_views()
         print("\n🎉 全部完成！MySQL 中已有完整的 Olist 分析数据库")
         print("\n可以运行 Streamlit 查看 SQL 分析结果:")
-        print("  streamlit run app.py")
+        print("  streamlit run datall.py")
     except pymysql.err.OperationalError as e:
         print(f"\n❌ MySQL 连接失败: {e}")
         print("\n请检查:")

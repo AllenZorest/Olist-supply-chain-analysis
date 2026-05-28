@@ -101,6 +101,11 @@ def run_ods():
             continue
 
         df = pd.read_csv(filepath)
+        # 修正 Kaggle 数据集中的拼写错误 (lenght → length)
+        df.rename(columns={
+            'product_name_lenght': 'product_name_length',
+            'product_description_lenght': 'product_description_length'
+        }, inplace=True)
         ods_table = f"ods_{table_name}"
 
         # 构造 INSERT
@@ -180,8 +185,8 @@ def run_dwd():
         d += timedelta(days=1)
 
     cursor.executemany(
-        "INSERT INTO dim_dates (date_id,year,quarter,month,month_name,week_of_year,"
-        "day_of_month,day_of_week,day_name,is_weekend,year_month) "
+        "INSERT INTO `dim_dates` (`date_id`,`year`,`quarter`,`month`,`month_name`,`week_of_year`,"
+        "`day_of_month`,`day_of_week`,`day_name`,`is_weekend`,`year_month`) "
         "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
         dates
     )
@@ -197,13 +202,13 @@ def run_dwd():
              customer_zip_prefix, first_purchase_date)
         SELECT
             c.customer_unique_id,
-            c.customer_state,
-            c.customer_city,
-            c.customer_zip_code_prefix,
+            MAX(c.customer_state),
+            MAX(c.customer_city),
+            MAX(c.customer_zip_code_prefix),
             MIN(DATE(o.order_purchase_timestamp)) AS first_purchase_date
         FROM ods_customers c
         LEFT JOIN ods_orders o ON c.customer_id = o.customer_id
-        GROUP BY c.customer_unique_id, c.customer_state, c.customer_city, c.customer_zip_code_prefix
+        GROUP BY c.customer_unique_id
     """)
     conn.commit()
     cursor.execute("SELECT COUNT(*) FROM dim_customers")
@@ -215,12 +220,16 @@ def run_dwd():
     cursor.execute("""
         INSERT INTO dim_products
             (product_id, product_category_name, category_name_english,
-             product_weight_g, product_volume_cm3, product_photos_qty)
+             product_weight_g, product_length_cm, product_height_cm,
+             product_width_cm, product_volume_cm3, product_photos_qty)
         SELECT
             p.product_id,
             p.product_category_name,
             COALESCE(t.product_category_name_english, p.product_category_name),
             p.product_weight_g,
+            p.product_length_cm,
+            p.product_height_cm,
+            p.product_width_cm,
             p.product_length_cm * p.product_height_cm * p.product_width_cm,
             p.product_photos_qty
         FROM ods_products p
@@ -311,7 +320,10 @@ def run_dwd():
             SELECT order_id, SUM(payment_value) AS payment_value, MAX(payment_type) AS payment_type
             FROM ods_order_payments GROUP BY order_id
         ) op ON o.order_id = op.order_id
-        LEFT JOIN ods_order_reviews r ON o.order_id = r.order_id
+        LEFT JOIN (
+            SELECT order_id, AVG(review_score) AS review_score
+            FROM ods_order_reviews GROUP BY order_id
+        ) r ON o.order_id = r.order_id
         WHERE o.order_status IN ('delivered', 'shipped')
           AND o.order_purchase_timestamp IS NOT NULL
           AND o.order_delivered_customer_date IS NOT NULL
@@ -452,9 +464,9 @@ def run_dws():
             avg_delivery_days, delay_rate, avg_review_score, etl_date
         )
         SELECT
-            CONCAT(YEAR(purchase_date), '-W', LPAD(WEEK(purchase_date, 1), 2, '0')),
-            MIN(purchase_date),
-            MAX(purchase_date),
+            CONCAT(YEAR(purchase_date), '-W', LPAD(WEEK(purchase_date, 1), 2, '0')) AS year_week,
+            MIN(purchase_date) AS week_start_date,
+            MAX(purchase_date) AS week_end_date,
             SUM(total_orders),
             SUM(total_gmv),
             SUM(total_orders) / 7.0,
@@ -496,9 +508,9 @@ def run_dws():
         GROUP BY category_name
     """)
     # 计算收入占比和累计占比（ABC 分类）
+    cursor.execute("SET @total := (SELECT SUM(total_revenue) FROM dws_category_summary)")
+    cursor.execute("SET @cum := 0")
     cursor.execute("""
-        SET @total := (SELECT SUM(total_revenue) FROM dws_category_summary);
-        SET @cum := 0;
         UPDATE dws_category_summary
         SET revenue_pct = total_revenue / @total,
             cumulative_pct = (@cum := @cum + total_revenue / @total)
@@ -551,33 +563,54 @@ def run_dws():
 # 全流程编排
 # ============================================================
 
-def run_all():
-    """依次执行 ODS → DWD → DWS"""
+def run_all(layer=None):
+    """依次执行 ODS → DWD → DWS（可指定单层）
+    layer: None=全量, 'ods', 'dwd', 'dws'
+    """
+    layers = {
+        'ods': ('ODS', run_ods),
+        'dwd': ('DWD', run_dwd),
+        'dws': ('DWS', run_dws),
+    }
+
+    if layer:
+        if layer not in layers:
+            print(f"❌ 未知层级: {layer}, 可选: {list(layers.keys())}")
+            return
+        targets = [layers[layer]]
+    else:
+        targets = list(layers.values())
+
     print("=" * 60)
-    print("  Olist 数仓 ETL 全流程")
+    print("  Olist 数仓 ETL")
     print(f"  目标数据库: {MYSQL_CONFIG['host']}:{MYSQL_CONFIG['port']}/{MYSQL_CONFIG['database']}")
+    print(f"  执行层级: {' → '.join(t[0] for t in targets)}")
     print("=" * 60)
 
     try:
-        run_ods()
-        run_dwd()
-        run_dws()
+        for name, func in targets:
+            func()
 
-        step_header("🎉 数仓 ETL 全部完成！")
-        print()
-        print("  数仓分层表结构:")
-        print("  ┌─────────────────────────────────────────┐")
-        print("  │  ADS  ← Streamlit 看板（读取 DWS 聚合表）│")
-        print("  │  DWS  ← 6 张聚合汇总表                   │")
-        print("  │  DWD  ← 1 张订单宽表 + 4 张维度表          │")
-        print("  │  ODS  ← 8 张原始数据表                    │")
-        print("  └─────────────────────────────────────────┘")
-        print()
-        print("  启动看板: streamlit run app.py")
+        if layer is None:
+            step_header("🎉 数仓 ETL 全部完成！")
+            print()
+            print("  数仓分层表结构:")
+            print("  ┌─────────────────────────────────────────┐")
+            print("  │  ADS  ← Streamlit 看板（读取 DWS 聚合表）│")
+            print("  │  DWS  ← 6 张聚合汇总表                   │")
+            print("  │  DWD  ← 1 张订单宽表 + 4 张维度表          │")
+            print("  │  ODS  ← 8 张原始数据表                    │")
+            print("  └─────────────────────────────────────────┘")
+            print()
+            print("  启动看板: streamlit run datall.py")
     except pymysql.err.OperationalError as e:
         print(f"\n❌ MySQL 连接失败: {e}")
         print("\n请确认 MySQL 服务已启动，并修改 dw/config.py 中的连接信息")
 
 
 if __name__ == '__main__':
-    run_all()
+    import argparse
+    parser = argparse.ArgumentParser(description='Olist 数仓 ETL')
+    parser.add_argument('--layer', choices=['ods', 'dwd', 'dws'], help='只运行指定层，不传则全量')
+    args = parser.parse_args()
+    run_all(layer=args.layer)

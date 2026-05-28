@@ -11,7 +11,7 @@ MYSQL_CONFIG = {
     'host': 'localhost',
     'port': 3306,
     'user': 'root',
-    'password': '',        # 修改为你的 MySQL 密码
+    'password': '123456',        # 修改为你的 MySQL 密码
     'database': 'olist_supply_chain',
     'charset': 'utf8mb4',
 }
