@@ -152,9 +152,6 @@ streamlit run datall.py
 | 业务需求分析 | Dashboard → Drill-down 分层设计 |
 | 大数据 | Hive DDL 翻译版（PARQUET 列存） |
 
-## 📝 面试话术
-
-> "我基于巴西 Olist 电商平台的 10 万条订单数据，构建了一个完整的供应链分析平台。技术上有两个亮点：一是实现了 CSV 和 MySQL 数仓双模式，侧边栏一键切换，覆盖不同场景；二是按标准数仓分层架构 ODS→DWD→DWS 设计了 19 张表，ETL 一键执行。看板设计上采用了 Dashboard → Drill-down 的分层导航，主页展示关键 KPI，子页面深入分析。核心分析逻辑我既用 Pandas 实现，也用 SQL 重写了一遍，JOIN、GROUP BY、窗口函数、CTE 都覆盖到了。"
 
 ## 📜 项目更新历程
 
